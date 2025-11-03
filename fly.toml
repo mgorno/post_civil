@@ -1,15 +1,19 @@
-# fly.toml (mínimo)
-app = "juliymarian" 
+# Reemplazá el nombre si ya tenés uno
+app = "juliymarian"
 
 [build]
-  dockerfile = "Dockerfile"
+  dockerfile = "Dockerfile"   # <-- obliga a usar Docker, no Nixpacks/mise
 
-[[services]]
+[env]
+  PORT = "8080"
+  # Si usás SQLite con volumen:
+  # DB_PATH = "/data/rsvps.db"
+
+# Nuevo esquema (reemplaza [[services]] legacy)
+[http_service]
   internal_port = 8080
-  protocol = "tcp"
-  [[services.ports]]
-    port = 80
-    handlers = ["http"]
-  [[services.ports]]
-    port = 443
-    handlers = ["tls", "http"]
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
