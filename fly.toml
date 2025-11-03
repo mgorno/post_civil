@@ -1,12 +1,11 @@
+app = "juliymarian"          
+
 [build]
-  dockerfile = "Dockerfile"   # <-- obliga a usar Docker, no Nixpacks/mise
+  dockerfile = "Dockerfile"   # obliga a usar Dockerfile (no Nixpacks/mise)
 
 [env]
   PORT = "8080"
-  # Si usás SQLite con volumen:
-  # DB_PATH = "/data/rsvps.db"
 
-# Nuevo esquema (reemplaza [[services]] legacy)
 [http_service]
   internal_port = 8080
   force_https = true
