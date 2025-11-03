@@ -1,0 +1,5 @@
+[tools]
+python = "3.12.6"   # o 3.11.9 si preferís
+
+[settings]
+python_compile = true
