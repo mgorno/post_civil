@@ -1,7 +1,7 @@
 app = "juliymarian"          
 
 [build]
-  dockerfile = "Dockerfile"   # obliga a usar Dockerfile (no Nixpacks/mise)
+  dockerfile = "Dockerfile"   
 
 [env]
   PORT = "8080"
