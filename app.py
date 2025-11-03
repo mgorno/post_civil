@@ -7,7 +7,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 ADMIN_KEY = os.getenv("ADMIN_KEY", "cambiame-por-una-clave-secreta")
-DB_PATH = os.getenv("DB_PATH", "rsvps.db")
+DB_PATH = os.getenv("DB_PATH", "/data/rsvps.db")
+ADMIN_BASE_URL = os.getenv("ADMIN_BASE_URL", "https://juliymarian.fly.dev/admin")
 
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "cambiame-para-produccion")
@@ -49,6 +50,23 @@ def init_db():
 def ensure_db():
     init_db()
 
+def admin_redirect():
+    # Redirige SIEMPRE a https://.../admin?key=...
+    return redirect(f"{ADMIN_BASE_URL}?key={ADMIN_KEY}")
+
+# ---------- Util menú ----------
+ALIASES_VEGGIE = {"veggie", "vegano", "vegan", "vegetariano", "vegetal"}
+
+def normalize_menu(val: str | None) -> str | None:
+    if not val:
+        return None
+    v = val.strip().lower()
+    if v in ALIASES_VEGGIE:
+        return "veggie"
+    if v == "standard":
+        return "standard"
+    return None
+
 # ---------- Rutas ----------
 @app.get("/")
 def rsvp_form():
@@ -58,8 +76,9 @@ def rsvp_form():
 def enviar_rsvp():
     try:
         nombre = (request.form.get("nombre") or "").strip()
-        confirma_val = request.form.get("confirma")
-        menu = (request.form.get("menu") or request.form.get("restricciones") or "").strip().lower()
+        confirma_val = (request.form.get("confirma") or "").strip().lower()
+        # admite "menu" o "restricciones" (compatibilidad con tu front)
+        raw_menu = (request.form.get("menu") or request.form.get("restricciones") or "").strip().lower()
         mensaje = (request.form.get("mensaje") or "").strip()
 
         errors = []
@@ -67,8 +86,11 @@ def enviar_rsvp():
             errors.append("El nombre es obligatorio.")
         if confirma_val not in ("si", "no"):
             errors.append("Indicá si asistís o no.")
-        if confirma_val == "si" and menu not in ("standard", "vegano"):
-            errors.append("Elegí un menú: Standard o Vegano.")
+
+        menu = normalize_menu(raw_menu)
+
+        if confirma_val == "si" and menu not in ("standard", "veggie"):
+            errors.append("Elegí un menú: Standard o Veggie.")
 
         # Validar que el nombre exista en 'invitados'
         db = get_db()
@@ -82,11 +104,12 @@ def enviar_rsvp():
             return redirect(url_for("rsvp_form"))
 
         confirma = 1 if confirma_val == "si" else 0
+        menu_to_save = menu if confirma == 1 else None
 
         db.execute("""
             INSERT INTO rsvps (nombre, confirma, menu, mensaje, created_at)
             VALUES (?, ?, ?, ?, ?)
-        """, (nombre, confirma, menu if confirma == 1 else None, mensaje or None,
+        """, (nombre, confirma, menu_to_save, (mensaje or None),
               datetime.now().isoformat(timespec="seconds")))
         db.commit()
 
@@ -120,8 +143,12 @@ def admin():
 
     total_si = sum(1 for r in rsvps if r["confirma"] == 1)
     total_no = sum(1 for r in rsvps if r["confirma"] == 0)
-    total_standard = sum(1 for r in rsvps if r["confirma"] == 1 and (r["menu"] or "").lower() == "standard")
-    total_vegano = sum(1 for r in rsvps if r["confirma"] == 1 and (r["menu"] or "").lower() == "vegano")
+    total_standard = sum(
+        1 for r in rsvps if r["confirma"] == 1 and (r["menu"] or "").lower() == "standard"
+    )
+    total_veggie = sum(
+        1 for r in rsvps if r["confirma"] == 1 and (r["menu"] or "").lower() in {"veggie", "vegano"}
+    )
 
     return render_template(
         "admin.html",
@@ -131,7 +158,8 @@ def admin():
         total_si=total_si,
         total_no=total_no,
         total_standard=total_standard,
-        total_vegano=total_vegano
+        total_veggie=total_veggie,   # <-- clave corregida
+        key=key
     )
 
 @app.post("/admin/cargar_invitados")
@@ -142,9 +170,10 @@ def admin_cargar_invitados():
 
     lista = (request.form.get("lista") or "").strip()
     if not lista:
-        return redirect(url_for("admin", key=key))
+        return admin_redirect()
 
     nombres = []
+    # Soporta líneas y comas
     for linea in lista.splitlines():
         for nombre in linea.split(","):
             nombre = nombre.strip()
@@ -159,7 +188,7 @@ def admin_cargar_invitados():
             pass
     db.commit()
 
-    return redirect(url_for("admin", key=key))
+    return admin_redirect()
 
 # --- API para autocompletar ---
 @app.get("/api/invitados")
@@ -186,6 +215,52 @@ def api_invitados():
     filas = db.execute(base_query, params).fetchall()
 
     return jsonify({"ok": True, "items": [f["nombre"] for f in filas]})
+
+@app.post("/admin/rsvp/update")
+def admin_rsvp_update():
+    key = request.form.get("key", "")
+    if key != ADMIN_KEY:
+        abort(401)
+
+    db = get_db()
+
+    rid = request.form.get("id")               # id de rsvps
+    nombre = (request.form.get("nombre") or "").strip()
+    confirma = request.form.get("confirma")    # "1" o "0"
+    raw_menu = (request.form.get("menu") or "").strip().lower()
+    mensaje = (request.form.get("mensaje") or "").strip() or None
+
+    # Validaciones mínimas
+    if not rid or not nombre or confirma not in ("0", "1"):
+        flash("Datos incompletos para actualizar el RSVP.", "danger")
+        return admin_redirect()
+
+    # Normalización de menú
+    menu = normalize_menu(raw_menu)
+
+    # Si no asiste => menú NULL
+    if confirma == "0":
+        menu = None
+
+    try:
+        db.execute(
+            """
+            UPDATE rsvps
+               SET nombre = ?,
+                   confirma = ?,
+                   menu = ?,
+                   mensaje = ?
+             WHERE id = ?
+            """,
+            (nombre, int(confirma), menu, mensaje, rid)
+        )
+        db.commit()
+        flash("RSVP actualizado correctamente.", "success")
+    except Exception as e:
+        db.rollback()
+        flash(f"Error al actualizar: {e}", "danger")
+
+    return admin_redirect()
 
 if __name__ == "__main__":
     app.run(debug=True)
