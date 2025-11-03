@@ -1,6 +1,3 @@
-# Reemplazá el nombre si ya tenés uno
-app = "juliymarian"
-
 [build]
   dockerfile = "Dockerfile"   # <-- obliga a usar Docker, no Nixpacks/mise
 
