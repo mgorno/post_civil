@@ -98,7 +98,7 @@ ing-bottom: .3rem;
     <div class="col-6 col-md-3">
       <div class="card text-dark">
         <div class="card-body">
-          <div class="small text-muted">Total “por invitado”</div>
+          <div class="small text-muted">Subtotal “por invitado”</div>
           <div class="h5 m-0">${{ miles(total_por_invitado) }}</div>
         </div>
       </div>
@@ -106,7 +106,7 @@ ing-bottom: .3rem;
     <div class="col-6 col-md-3">
       <div class="card text-dark">
         <div class="card-body">
-          <div class="small text-muted">Total “totales”</div>
+          <div class="small text-muted">Subtotal “Gastos Generales”</div>
           <div class="h5 m-0">${{ miles(total_totales) }}</div>
         </div>
       </div>
@@ -114,7 +114,7 @@ ing-bottom: .3rem;
     <div class="col-6 col-md-3">
       <div class="card text-dark">
         <div class="card-body">
-          <div class="small text-muted">Gran total</div>
+          <div class="small text-muted">Total</div>
           <div class="h5 m-0">${{ miles(gran_total) }}</div>
         </div>
       </div>
@@ -230,13 +230,13 @@ ing-bottom: .3rem;
     <!-- Totales: etiqueta ocupa Fecha+Concepto+Notas+Tipo; montos quedan juntos a la derecha -->
     <tfoot>
       <tr class="table-secondary text-dark">
-        <td colspan="4" class="text-end fw-semibold">Totales:</td>
+        <td colspan="4" class="text-end fw-semibold">Subtotal:</td>
         <td class="text-end text-nowrap fw-semibold">${{ miles(total_totales) }}</td>
         <td class="text-end text-nowrap fw-semibold">${{ miles(total_por_invitado) }}</td>
         <td></td>
       </tr>
       <tr class="table-secondary text-dark">
-        <td colspan="4" class="text-end fw-semibold">Gran total:</td>
+        <td colspan="4" class="text-end fw-semibold">Total:</td>
         <td class="text-end text-nowrap fw-bold" colspan="2">${{ miles(gran_total) }}</td>
         <td></td>
       </tr>
