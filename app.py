@@ -51,7 +51,6 @@ def ensure_db():
     init_db()
 
 def admin_redirect():
-    # Redirige SIEMPRE a https://.../admin?key=...
     return redirect(f"{ADMIN_BASE_URL}?key={ADMIN_KEY}")
 
 # ---------- Util menú ----------
@@ -77,7 +76,6 @@ def enviar_rsvp():
     try:
         nombre = (request.form.get("nombre") or "").strip()
         confirma_val = (request.form.get("confirma") or "").strip().lower()
-        # admite "menu" o "restricciones" (compatibilidad con tu front)
         raw_menu = (request.form.get("menu") or request.form.get("restricciones") or "").strip().lower()
         mensaje = (request.form.get("mensaje") or "").strip()
 
@@ -88,11 +86,9 @@ def enviar_rsvp():
             errors.append("Indicá si asistís o no.")
 
         menu = normalize_menu(raw_menu)
-
         if confirma_val == "si" and menu not in ("standard", "veggie"):
             errors.append("Elegí un menú: Standard o Veggie.")
 
-        # Validar que el nombre exista en 'invitados'
         db = get_db()
         row_inv = db.execute("SELECT 1 FROM invitados WHERE nombre = ?", (nombre,)).fetchone()
         if not row_inv:
@@ -137,8 +133,11 @@ def admin():
         ORDER BY created_at DESC
     """).fetchall()
 
+    # Traer también ID para poder editar invitados
     invitados = db.execute("""
-        SELECT nombre FROM invitados ORDER BY nombre ASC
+        SELECT id, nombre
+        FROM invitados
+        ORDER BY nombre ASC
     """).fetchall()
 
     total_si = sum(1 for r in rsvps if r["confirma"] == 1)
@@ -153,12 +152,12 @@ def admin():
     return render_template(
         "admin.html",
         rsvps=rsvps,
-        invitados=[x["nombre"] for x in invitados],
+        invitados=invitados,
         cant_invitados=len(invitados),
         total_si=total_si,
         total_no=total_no,
         total_standard=total_standard,
-        total_veggie=total_veggie,   # <-- clave corregida
+        total_veggie=total_veggie,
         key=key
     )
 
@@ -173,7 +172,6 @@ def admin_cargar_invitados():
         return admin_redirect()
 
     nombres = []
-    # Soporta líneas y comas
     for linea in lista.splitlines():
         for nombre in linea.split(","):
             nombre = nombre.strip()
@@ -187,35 +185,74 @@ def admin_cargar_invitados():
         except:
             pass
     db.commit()
+    return admin_redirect()
+
+# === NUEVO: actualizar nombre de INVITADO ===
+@app.post("/admin/invitado/update")
+def admin_invitado_update():
+    key = request.form.get("key", "")
+    if key != ADMIN_KEY:
+        abort(401)
+
+    inv_id = request.form.get("id")
+    nuevo = (request.form.get("nombre") or "").strip()
+    cascade = (request.form.get("cascade") == "1")
+
+    if not inv_id or not nuevo:
+        flash("Faltan datos para actualizar el invitado.", "danger")
+        return admin_redirect()
+
+    db = get_db()
+    try:
+        # Obtener nombre anterior
+        row_old = db.execute("SELECT nombre FROM invitados WHERE id = ?", (inv_id,)).fetchone()
+        if not row_old:
+            flash("Invitado no encontrado.", "danger")
+            return admin_redirect()
+        viejo = row_old["nombre"]
+
+        # Actualizar en 'invitados'
+        db.execute("UPDATE invitados SET nombre = ? WHERE id = ?", (nuevo, inv_id))
+
+        # Cascada opcional: actualizar en RSVPs que usen el nombre viejo
+        if cascade and viejo != nuevo:
+            db.execute("UPDATE rsvps SET nombre = ? WHERE nombre = ?", (nuevo, viejo))
+
+        db.commit()
+        flash("Invitado actualizado correctamente.", "success")
+    except sqlite3.IntegrityError:
+        db.rollback()
+        flash("Ya existe un invitado con ese nombre.", "danger")
+    except Exception as e:
+        db.rollback()
+        flash(f"Error al actualizar invitado: {e}", "danger")
 
     return admin_redirect()
 
-# --- API para autocompletar ---
+# API de invitados para autocompletar (si la usás)
 @app.get("/api/invitados")
 def api_invitados():
-    """Devuelve invitados SIN confirmar para autocompletar."""
     q = (request.args.get("q") or "").strip()
-    db = get_db()
+    if len(q) < 2:
+        return jsonify({"ok": True, "items": []})
 
-    # Invitados que todavía no registraron RSVP
-    base_query = """
-        SELECT i.nombre 
+    db = get_db()
+    filas = db.execute(
+        """
+        SELECT i.nombre
         FROM invitados i
         LEFT JOIN rsvps r ON r.nombre = i.nombre
         WHERE r.nombre IS NULL
-    """
-
-    params = []
-    if q:
-        base_query += " AND i.nombre LIKE ?"
-        params.append(f"%{q}%")
-
-    base_query += " ORDER BY i.nombre LIMIT 50"
-
-    filas = db.execute(base_query, params).fetchall()
+          AND i.nombre LIKE ?
+        ORDER BY i.nombre
+        LIMIT 5
+        """,
+        (f"{q}%",)
+    ).fetchall()
 
     return jsonify({"ok": True, "items": [f["nombre"] for f in filas]})
 
+# === Ya existente: actualizar RSVP ===
 @app.post("/admin/rsvp/update")
 def admin_rsvp_update():
     key = request.form.get("key", "")
@@ -224,21 +261,17 @@ def admin_rsvp_update():
 
     db = get_db()
 
-    rid = request.form.get("id")               # id de rsvps
+    rid = request.form.get("id")
     nombre = (request.form.get("nombre") or "").strip()
     confirma = request.form.get("confirma")    # "1" o "0"
     raw_menu = (request.form.get("menu") or "").strip().lower()
     mensaje = (request.form.get("mensaje") or "").strip() or None
 
-    # Validaciones mínimas
     if not rid or not nombre or confirma not in ("0", "1"):
         flash("Datos incompletos para actualizar el RSVP.", "danger")
         return admin_redirect()
 
-    # Normalización de menú
     menu = normalize_menu(raw_menu)
-
-    # Si no asiste => menú NULL
     if confirma == "0":
         menu = None
 

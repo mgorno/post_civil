@@ -30,6 +30,7 @@
         {% endfor %}
       </div>
 
+      <!-- Cargar invitados -->
       <div class="card mb-3">
         <div class="card-body text-dark">
           <h6 class="mb-1">Cargar invitados</h6>
@@ -51,6 +52,7 @@
         </div>
       </div>
 
+      <!-- Lista de invitados (editar) -->
       <div class="accordion mb-4" id="accordionInvitados">
         <div class="accordion-item">
           <h2 class="accordion-header">
@@ -69,11 +71,28 @@
           >
             <div class="accordion-body text-dark">
               {% if invitados %}
-              <ol class="small m-0">
-                {% for x in invitados %}
-                <li>{{ x }}</li>
+              <ol class="small m-0 ps-4">
+                {% for inv in invitados %}
+                <li class="mb-1">
+                  <div
+                    class="d-flex justify-content-between align-items-center gap-2"
+                  >
+                    <span>{{ inv.nombre }}</span>
+                    <button
+                      type="button"
+                      class="btn btn-sm btn-outline-info"
+                      data-bs-toggle="modal"
+                      data-bs-target="#modalEditarInvitado"
+                      data-id="{{ inv.id }}"
+                      data-nombre="{{ inv.nombre }}"
+                    >
+                      Editar
+                    </button>
+                  </div>
+                </li>
                 {% endfor %}
               </ol>
+
               {% else %}
               <p class="text-muted small m-0">No hay invitados aún.</p>
               {% endif %}
@@ -82,6 +101,7 @@
         </div>
       </div>
 
+      <!-- Tabla RSVPs -->
       <div class="table-responsive">
         <table class="table table-dark table-striped align-middle">
           <thead>
@@ -129,7 +149,70 @@
       </div>
     </div>
 
-    <!-- Modal único para editar -->
+    <!-- Modal editar INVITADO -->
+    <div
+      class="modal fade"
+      id="modalEditarInvitado"
+      tabindex="-1"
+      aria-hidden="true"
+    >
+      <div class="modal-dialog">
+        <form
+          class="modal-content bg-dark text-light"
+          method="post"
+          action="{{ url_for('admin_invitado_update') }}"
+        >
+          <div class="modal-header">
+            <h5 class="modal-title">Editar invitado</h5>
+            <button
+              type="button"
+              class="btn-close btn-close-white"
+              data-bs-dismiss="modal"
+              aria-label="Cerrar"
+            ></button>
+          </div>
+          <div class="modal-body">
+            <input type="hidden" name="id" id="edit-inv-id" />
+            <input
+              type="hidden"
+              name="key"
+              value="{{ request.args.get('key') }}"
+            />
+            <div class="mb-3">
+              <label class="form-label">Nombre</label>
+              <input
+                type="text"
+                class="form-control"
+                name="nombre"
+                id="edit-inv-nombre"
+                required
+              />
+              <div class="form-text text-muted">
+                Modificá el nombre del invitado.
+              </div>
+            </div>
+            <div class="form-check">
+              <input
+                class="form-check-input"
+                type="checkbox"
+                value="1"
+                id="chk-cascade"
+                name="cascade"
+                checked
+              />
+              <label class="form-check-label" for="chk-cascade">
+                Actualizar también en confirmaciones (RSVP) si existieran
+              </label>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-primary">Guardar cambios</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Modal editar RSVP -->
     <div class="modal fade" id="modalEditar" tabindex="-1" aria-hidden="true">
       <div class="modal-dialog">
         <form
@@ -146,7 +229,6 @@
               aria-label="Cerrar"
             ></button>
           </div>
-
           <div class="modal-body">
             <input type="hidden" name="id" id="edit-id" />
             <input
@@ -224,6 +306,7 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
       (() => {
+        // Modal editar RSVP
         const modal = document.getElementById("modalEditar");
         modal.addEventListener("show.bs.modal", (ev) => {
           const btn = ev.relatedTarget;
@@ -236,15 +319,12 @@
           document.getElementById("edit-id").value = id;
           document.getElementById("edit-nombre").value = nombre;
 
-          // Radios
           document.getElementById("edit-si").checked = confirma === "1";
           document.getElementById("edit-no").checked = confirma !== "1";
 
-          // Menú
           const sel = document.getElementById("edit-menu");
-          sel.value = menu; // "standard" | "veggie" | ""
+          sel.value = menu;
 
-          // Si NO asiste, deshabilitá menú
           const toggleMenu = () => {
             if (document.getElementById("edit-si").checked) {
               sel.disabled = false;
@@ -257,8 +337,17 @@
           document.getElementById("edit-no").onchange = toggleMenu;
           toggleMenu();
 
-          // Mensaje
           document.getElementById("edit-mensaje").value = mensaje;
+        });
+
+        // Modal editar INVITADO
+        const modalInv = document.getElementById("modalEditarInvitado");
+        modalInv.addEventListener("show.bs.modal", (ev) => {
+          const btn = ev.relatedTarget;
+          const id = btn.getAttribute("data-id");
+          const nombre = btn.getAttribute("data-nombre") || "";
+          document.getElementById("edit-inv-id").value = id;
+          document.getElementById("edit-inv-nombre").value = nombre;
         });
       })();
     </script>
