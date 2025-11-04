@@ -3,6 +3,10 @@ import sqlite3
 from datetime import datetime
 from flask import Flask, render_template, request, redirect, url_for, flash, abort, g, jsonify
 from dotenv import load_dotenv
+import csv
+import io
+from flask import Response
+from datetime import datetime
 
 load_dotenv()
 
@@ -294,6 +298,110 @@ def admin_rsvp_update():
         flash(f"Error al actualizar: {e}", "danger")
 
     return admin_redirect()
+
+@app.get("/admin/export.xlsx")
+def admin_export_xlsx():
+    key = request.args.get("key", "")
+    if key != ADMIN_KEY:
+        abort(401)
+
+    # Intentá importar openpyxl
+    try:
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, Alignment
+        from openpyxl.utils import get_column_letter
+    except Exception as e:
+        # Mensaje claro si falta instalar
+        return Response(
+            "Falta instalar openpyxl. Ejecutá:\n\n    pip install openpyxl\n",
+            mimetype="text/plain; charset=utf-8",
+            status=500,
+        )
+
+    # Traemos por invitado el ÚLTIMO RSVP si lo hubiera
+    db = get_db()
+    try:
+        rows = db.execute("""
+            SELECT i.nombre,
+                   r.confirma,
+                   r.menu,
+                   r.mensaje,
+                   r.created_at
+            FROM invitados i
+            LEFT JOIN (
+                SELECT nombre, confirma, menu, mensaje, created_at
+                FROM rsvps r1
+                WHERE r1.created_at = (
+                    SELECT MAX(r2.created_at)
+                    FROM rsvps r2
+                    WHERE r2.nombre = r1.nombre
+                )
+            ) r ON r.nombre = i.nombre
+            ORDER BY i.nombre
+        """).fetchall()
+    except Exception as e:
+        return Response(f"Error leyendo la base: {e}", mimetype="text/plain; charset=utf-8", status=500)
+
+    # Separamos respondieron vs faltan
+    respondieron = []
+    faltan = []
+    for row in rows:
+        if row["created_at"]:
+            confirma_txt = "si" if row["confirma"] == 1 else "no"
+            respondieron.append([
+                row["nombre"],
+                confirma_txt,
+                row["menu"] or "",
+                row["mensaje"] or "",
+                row["created_at"],
+            ])
+        else:
+            faltan.append([row["nombre"]])
+
+    # --- Generar XLSX ---
+    wb = Workbook()
+
+    # Hoja 1
+    ws1 = wb.active
+    ws1.title = "Respondieron"
+    headers1 = ["nombre", "confirma", "menu", "mensaje", "fecha_ultima_respuesta"]
+    ws1.append(headers1)
+    for r in respondieron:
+        ws1.append(r)
+    # estilos
+    bold = Font(bold=True)
+    for cell in ws1[1]:
+        cell.font = bold
+        cell.alignment = Alignment(vertical="center")
+    # anchos
+    col_widths1 = [30, 10, 14, 50, 24]
+    for idx, w in enumerate(col_widths1, start=1):
+        ws1.column_dimensions[get_column_letter(idx)].width = w
+
+    # Hoja 2
+    ws2 = wb.create_sheet(title="Faltan")
+    headers2 = ["nombre"]
+    ws2.append(headers2)
+    for r in faltan:
+        ws2.append(r)
+    for cell in ws2[1]:
+        cell.font = bold
+        cell.alignment = Alignment(vertical="center")
+    ws2.column_dimensions["A"].width = 30
+
+    # Guardar a memoria
+    bio = io.BytesIO()
+    wb.save(bio)
+    bio.seek(0)
+
+    filename = f"confirmaciones_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    resp = Response(
+        bio.read(),
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    resp.headers["Content-Disposition"] = f"attachment; filename={filename}"
+    return resp
+
 
 if __name__ == "__main__":
     app.run(debug=True)
