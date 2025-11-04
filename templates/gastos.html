@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Gastos de la Fiestita</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  {# --------- Macro Jinja para miles con punto y sin decimales --------- #}
+  {% macro miles(x) -%}
+    {{ "{:,.0f}".format((x or 0)|float).replace(",", ".") }}
+  {%- endmacro %}
+<style>
+/* Alineación vertical uniforme en toda la tabla */
+.table > :not(caption) > * > * { vertical-align: middle; }
+
+/* Evitar cortes de línea en importes y compactar columna Acciones */
+.text-nowrap { white-space: nowrap; }
+.td-acciones { width: 1%; white-space: nowrap; }
+
+/* Limitar ancho de Notas para que no “empuje” la fila */
+.col-notas { max-width: 640px; }
+
+/* Botones centrados y con altura visual pareja */
+.table .btn.btn-sm {
+  line-height: 1.1;
+  padding-top: .3rem;
+  padding-bottom: .3rem;
+}
+ing-bottom: .3rem;
+}
+</style>
+</head>
+<body class="bg-dark text-light">
+<div class="container py-4">
+
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h4 m-0">💸 Gastos de la Fiestita</h1>
+    <div class="d-flex gap-2">
+      <a class="btn btn-success btn-sm"
+         href="{{ url_for('gastos_export_xlsx', base=base, n=n_manual) }}">
+        Exportar Excel
+      </a>
+      <a class="btn btn-outline-light btn-sm" href="{{ url_for('admin') }}?key={{ config.get('ADMIN_KEY','') }}">Volver al Admin</a>
+    </div>
+  </div>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="mb-3">
+        {% for cat, msg in messages %}
+          <div class="alert alert-{{ 'danger' if cat=='danger' else cat }} mb-2" role="alert">
+            {{ msg }}
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  <!-- Base de cálculo -->
+  <div class="card mb-3">
+    <div class="card-body text-dark">
+      <form class="row g-2 align-items-end" method="get" action="{{ url_for('gastos_panel') }}">
+        <div class="col-sm-6 col-md-4">
+          <label class="form-label">Base de cálculo</label>
+          <select name="base" class="form-select">
+            <option value="invitados" {{ 'selected' if base=='invitados' else '' }}>
+              Invitados cargados ({{ miles(total_invitados) }})
+            </option>
+            <option value="confirmados" {{ 'selected' if base=='confirmados' else '' }}>
+              Confirmados ({{ miles(total_confirmados) }})
+            </option>
+            <option value="manual" {{ 'selected' if base=='manual' else '' }}>
+              Manual
+            </option>
+          </select>
+        </div>
+        <div class="col-sm-4 col-md-2">
+          <label class="form-label">N° manual</label>
+          <!-- lo dejo sin formato en el input para que sea fácil de editar -->
+          <input type="number" min="0" class="form-control" name="n" value="{{ n_manual|int }}">
+        </div>
+        <div class="col-sm-2 col-md-2">
+          <button class="btn btn-primary w-100">Aplicar</button>
+        </div>
+
+        <div class="col-12">
+          <small class="text-muted">
+            Base en uso: <strong>{{ miles(n_base) }}</strong> personas.
+          </small>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Resumen -->
+  <div class="row g-3 mb-3">
+    <div class="col-6 col-md-3">
+      <div class="card text-dark">
+        <div class="card-body">
+          <div class="small text-muted">Total “por invitado”</div>
+          <div class="h5 m-0">${{ miles(total_por_invitado) }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card text-dark">
+        <div class="card-body">
+          <div class="small text-muted">Total “totales”</div>
+          <div class="h5 m-0">${{ miles(total_totales) }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card text-dark">
+        <div class="card-body">
+          <div class="small text-muted">Gran total</div>
+          <div class="h5 m-0">${{ miles(gran_total) }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card text-dark">
+        <div class="card-body">
+          <div class="small text-muted">Costo por invitado</div>
+          <div class="h5 m-0">${{ miles(costo_por_invitado) }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Alta de gasto -->
+  <div class="card mb-3">
+    <div class="card-body text-dark">
+      <h6 class="mb-3">Agregar gasto</h6>
+      <form id="form-agregar-gasto" method="post" action="{{ url_for('gastos_agregar', base=base, n=n_manual) }}">
+        <div class="row g-2">
+          <div class="col-md-4">
+            <label class="form-label">Concepto *</label>
+            <input type="text" class="form-control" name="concepto" required placeholder="Ej: Catering, DJ, Bebidas">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Tipo *</label>
+            <select name="tipo" class="form-select" required>
+              <option value="por_invitado">Por invitado</option>
+              <option value="total">Total</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Monto *</label>
+            <!-- El usuario puede tipear con o sin puntos. Lo limpio al enviar. -->
+            <input type="text" class="form-control" name="monto" inputmode="numeric" required placeholder="Ej: 15000">
+          </div>
+          <div class="col-md-2 d-grid">
+            <label class="form-label d-none d-md-block">&nbsp;</label>
+            <button class="btn btn-primary">Agregar</button>
+          </div>
+          <div class="col-12">
+            <label class="form-label">Notas</label>
+            <input type="text" class="form-control" name="notas" placeholder="Proveedor, forma de pago, etc. (opcional)">
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Tabla de gastos -->
+  <div class="table-responsive">
+  <table class="table table-dark table-striped align-middle">
+    <thead>
+      <tr>
+        <th>Fecha</th>
+        <th>Concepto</th>
+        <th class="col-notas">Notas</th>
+        <th>Tipo</th>
+        <th class="text-end">Monto base</th>
+        <th class="text-end">Total (calc.)</th>
+        <th class="text-end">Acciones</th>
+      </tr>
+    </thead>
+
+    <tbody>
+      {% for g in filas %}
+      <tr>
+        <td><small>{{ g.created_at }}</small></td>
+        <td>{{ g.concepto }}</td>
+
+        <!-- Notas antes que montos -->
+        <td class="col-notas">
+          {{ g.notas or '' }}
+        </td>
+
+        <td>
+          {% if g.tipo == 'por_invitado' %}
+            <span class="badge bg-info">Por invitado × {{ n_base }}</span>
+          {% else %}
+            <span class="badge bg-secondary">Total</span>
+          {% endif %}
+        </td>
+
+        <!-- Montos a la derecha, sin decimales y con miles -->
+        <td class="text-end text-nowrap">${{ miles(g.monto) }}</td>
+        <td class="text-end text-nowrap">${{ miles(g.total_linea) }}</td>
+
+        <!-- Acciones centradas verticalmente -->
+        <td class="td-acciones">
+          <div class="d-flex justify-content-end align-items-center gap-2 flex-wrap">
+            <button
+              class="btn btn-sm btn-outline-info"
+              data-bs-toggle="modal"
+              data-bs-target="#modalEditarGasto"
+              data-id="{{ g.id }}"
+              data-concepto="{{ g.concepto }}"
+              data-tipo="{{ g.tipo }}"
+              data-monto="{{ g.monto }}"
+              data-notas="{{ g.notas or '' }}"
+            >Editar</button>
+
+            <form method="post"
+                  action="{{ url_for('gastos_borrar', gid=g.id, base=base, n=n_manual) }}"
+                  onsubmit="return confirm('¿Eliminar este gasto?');">
+              <button class="btn btn-sm btn-outline-danger">Borrar</button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+
+    <!-- Totales: etiqueta ocupa Fecha+Concepto+Notas+Tipo; montos quedan juntos a la derecha -->
+    <tfoot>
+      <tr class="table-secondary text-dark">
+        <td colspan="4" class="text-end fw-semibold">Totales:</td>
+        <td class="text-end text-nowrap fw-semibold">${{ miles(total_totales) }}</td>
+        <td class="text-end text-nowrap fw-semibold">${{ miles(total_por_invitado) }}</td>
+        <td></td>
+      </tr>
+      <tr class="table-secondary text-dark">
+        <td colspan="4" class="text-end fw-semibold">Gran total:</td>
+        <td class="text-end text-nowrap fw-bold" colspan="2">${{ miles(gran_total) }}</td>
+        <td></td>
+      </tr>
+      <tr class="table-secondary text-dark">
+        <td colspan="4" class="text-end fw-semibold">
+          Costo por invitado ({{ miles(n_base) }}):
+        </td>
+        <td class="text-end text-nowrap fw-bold" colspan="2">
+          ${{ miles(costo_por_invitado) }}
+        </td>
+        <td></td>
+      </tr>
+    </tfoot>
+  </table>
+</div>
+
+</div>
+
+<!-- Modal editar gasto -->
+<div class="modal fade" id="modalEditarGasto" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <form id="form-editar-gasto" class="modal-content bg-dark text-light" method="post"
+          action="{{ url_for('gastos_editar', base=base, n=n_manual) }}">
+      <div class="modal-header">
+        <h5 class="modal-title">Editar gasto</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" name="id" id="eg-id" />
+        <div class="mb-3">
+          <label class="form-label">Concepto *</label>
+          <input type="text" class="form-control" name="concepto" id="eg-concepto" required />
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Tipo *</label>
+          <select class="form-select" name="tipo" id="eg-tipo" required>
+            <option value="por_invitado">Por invitado</option>
+            <option value="total">Total</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Monto *</label>
+          <!-- acá lo mostramos con puntos; al enviar lo limpiamos -->
+          <input type="text" class="form-control" name="monto" id="eg-monto" required />
+          <div class="form-text text-muted">Ingresá números (podés usar puntos de miles).</div>
+        </div>
+        <div>
+          <label class="form-label">Notas</label>
+          <input type="text" class="form-control" name="notas" id="eg-notas" />
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary">Guardar cambios</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+  // Utilidad: formatear miles con punto (sin decimales)
+  function formatMilesInt(val) {
+    const n = (val ?? "").toString().replace(/\D/g, ""); // deja solo dígitos
+    if (!n) return "";
+    return n.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  }
+  function unformatMiles(str) {
+    return (str ?? "").toString().replace(/\./g, "");
+  }
+
+  // Habilitar/deshabilitar N manual según base
+  (function(){
+    const sel = document.querySelector('select[name="base"]');
+    const n = document.querySelector('input[name="n"]');
+    function sync(){
+      if(!sel || !n) return;
+      if(sel.value === 'manual'){
+        n.removeAttribute('disabled');
+      } else {
+        n.setAttribute('disabled','disabled');
+      }
+    }
+    if(sel && n){
+      sel.addEventListener('change', sync);
+      sync();
+    }
+  })();
+
+  // Completar modal de edición con los datos del botón
+  (() => {
+    const modal = document.getElementById("modalEditarGasto");
+    if (modal) {
+      modal.addEventListener("show.bs.modal", (ev) => {
+        const btn = ev.relatedTarget;
+        document.getElementById("eg-id").value = btn.getAttribute("data-id");
+        document.getElementById("eg-concepto").value = btn.getAttribute("data-concepto") || "";
+        document.getElementById("eg-tipo").value = btn.getAttribute("data-tipo") || "total";
+
+        // Prefiere el RAW; si no, toma el formateado y lo limpia para re-formatear
+        const raw = btn.getAttribute("data-monto-raw");
+        const fallbackFmt = btn.getAttribute("data-monto") || "";
+        const baseNum = raw ? raw : unformatMiles(fallbackFmt);
+        document.getElementById("eg-monto").value = formatMilesInt(baseNum);
+
+        document.getElementById("eg-notas").value = btn.getAttribute("data-notas") || "";
+      });
+    }
+  })();
+
+  // En inputs de monto: formatear en vivo con punto de miles
+  (function(){
+    // agregar listeners a ambos formularios (agregar y editar)
+    const montoInputs = [
+      ...document.querySelectorAll('form input[name="monto"]')
+    ];
+    montoInputs.forEach(inp => {
+      inp.addEventListener('input', (e) => {
+        const pos = inp.selectionStart;
+        const before = inp.value;
+        inp.value = formatMilesInt(inp.value);
+        // intentar mantener el cursor al final (simple, suficiente para este caso)
+        if (document.activeElement === inp) {
+          inp.setSelectionRange(inp.value.length, inp.value.length);
+        }
+      });
+    });
+
+    // limpiar puntos antes de enviar (agregar)
+    const fAdd = document.getElementById("form-agregar-gasto");
+    if (fAdd) {
+      fAdd.addEventListener("submit", () => {
+        const mi = fAdd.querySelector('input[name="monto"]');
+        if (mi) mi.value = unformatMiles(mi.value);
+      });
+    }
+    // limpiar puntos antes de enviar (editar)
+    const fEdit = document.getElementById("form-editar-gasto");
+    if (fEdit) {
+      fEdit.addEventListener("submit", () => {
+        const mi = fEdit.querySelector('input[name="monto"]');
+        if (mi) mi.value = unformatMiles(mi.value);
+      });
+    }
+  })();
+</script>
+</body>
+</html>
