@@ -237,7 +237,7 @@ def admin_invitado_update():
 @app.get("/api/invitados")
 def api_invitados():
     q = (request.args.get("q") or "").strip()
-    if len(q) < 2:
+    if len(q) < 3:
         return jsonify({"ok": True, "items": []})
 
     db = get_db()
@@ -250,16 +250,19 @@ def api_invitados():
            FROM rsvps
            GROUP BY nombre
         ) ult ON ult.nombre = i.nombre
-        LEFT JOIN rsvps r ON r.nombre = i.nombre AND r.created_at = ult.mx
-        WHERE (r.nombre IS NULL) OR (r.confirma <> 1)
-          AND i.nombre LIKE ?
+        LEFT JOIN rsvps r
+               ON r.nombre = i.nombre
+              AND r.created_at = ult.mx
+        WHERE i.nombre LIKE ?
+          AND (r.nombre IS NULL OR r.confirma <> 1)
         ORDER BY i.nombre
-        LIMIT 5
+        LIMIT 1
         """,
-        (f"{q}%",)
+        (f"%{q}%",)   # contiene, como tu endpoint viejo
     ).fetchall()
 
     return jsonify({"ok": True, "items": [f["nombre"] for f in filas]})
+
 
 @app.post("/admin/rsvp/update")
 def admin_rsvp_update():
