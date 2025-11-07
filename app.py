@@ -237,7 +237,7 @@ def admin_invitado_update():
 @app.get("/api/invitados")
 def api_invitados():
     q = (request.args.get("q") or "").strip()
-    if len(q) < 3:
+    if len(q) < 4:
         return jsonify({"ok": True, "items": []})
 
     db = get_db()
@@ -256,7 +256,7 @@ def api_invitados():
         WHERE i.nombre LIKE ?
           AND (r.nombre IS NULL OR r.confirma <> 1)
         ORDER BY i.nombre
-        LIMIT 1
+        LIMIT 5
         """,
         (f"%{q}%",)   # contiene, como tu endpoint viejo
     ).fetchall()
