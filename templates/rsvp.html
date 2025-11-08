@@ -27,16 +27,15 @@
         --accent-rose: #e8b4b8;
       }
 
-      /* Fondo negro puro en lugar de gradiente azul */
       body {
         background: #000000;
         min-height: 100vh;
         font-family: "Inter", sans-serif;
         position: relative;
         overflow-x: hidden;
+        padding-top: 56px; /* espacio para barra superior */
       }
 
-      /* Efecto sutil de brillo dorado en el fondo negro */
       body::before {
         content: "";
         position: fixed;
@@ -63,7 +62,59 @@
         z-index: 1;
       }
 
-      /* Tarjeta con fondo negro puro en lugar de gradiente oscuro */
+      /* Barra superior con botón Home */
+      .top-bar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 20;
+        padding: 0.4rem 0.9rem;
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        background: rgba(0, 0, 0, 0.92);
+        backdrop-filter: blur(8px);
+        border-bottom: 1px solid rgba(212, 175, 55, 0.25);
+      }
+
+      .top-bar .btn-home {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.25rem 0.75rem;
+        font-size: 0.8rem;
+        border-radius: 999px;
+        border: 1px solid rgba(212, 175, 55, 0.6);
+        background: radial-gradient(circle at top left, rgba(212,175,55,0.18), transparent);
+        color: #f4e4c1;
+        text-decoration: none;
+        transition: all 0.25s ease;
+      }
+
+      .top-bar .btn-home i {
+        font-size: 0.85rem;
+      }
+
+      .top-bar .btn-home:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.9);
+        border-color: #d4af37;
+        color: #ffffff;
+        text-decoration: none;
+      }
+
+      .top-bar .brand-mini {
+        font-family: "Playfair Display", serif;
+        font-size: 0.9rem;
+        background: linear-gradient(135deg, #d4af37, #f4e4c1, #d4af37);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin: 0;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
       .invitation-card {
         background: #000000;
         border: 1px solid rgba(212, 175, 55, 0.4);
@@ -152,13 +203,8 @@
       }
 
       @keyframes shimmer {
-        0%,
-        100% {
-          opacity: 1;
-        }
-        50% {
-          opacity: 0.85;
-        }
+        0%,100% { opacity: 1; }
+        50% { opacity: 0.85; }
       }
 
       .event-title {
@@ -330,38 +376,16 @@
         color: rgba(255, 255, 255, 0.9);
       }
 
-      .heart-icon {
-        color: var(--accent-rose);
-        animation: heartbeat 1.5s ease-in-out infinite;
-        display: inline-block;
-      }
-
-      @keyframes heartbeat {
-        0%,
-        100% {
-          transform: scale(1);
-        }
-        25% {
-          transform: scale(1.1);
-        }
-        50% {
-          transform: scale(1);
-        }
-      }
-
       @media (max-width: 576px) {
         .couple-names {
           font-size: 2.25rem;
         }
-
         .event-title {
           font-size: 1.5rem;
         }
-
         .btn-group {
           flex-direction: column;
         }
-
         .btn-outline-success,
         .btn-outline-secondary {
           width: 100%;
@@ -371,10 +395,18 @@
   </head>
 
   <body>
+    <!-- Barra superior con volver al home -->
+    <div class="top-bar">
+      <a href="{{ url_for('home') }}" class="btn-home">
+        <i class="fas fa-arrow-left"></i>
+        <span>Volver al inicio</span>
+      </a>
+      <p class="brand-mini mb-0 ms-1">Juli &amp; Marian</p>
+    </div>
+
     <div class="container py-5">
       <div class="mx-auto invitation-card shadow-lg" style="max-width: 720px">
         <div class="card-body p-4 p-md-5">
-          <!-- Header Section -->
           <div class="text-center mb-4">
             <h1 class="couple-names mb-3">Juli & Marian</h1>
             <h2 class="event-title">¡Nos casamos!</h2>
@@ -391,7 +423,7 @@
             </p>
 
             <p class="event-message">
-              Por favor confirmá, así sabemos si te esperamos
+              Por favor confirmá, así sabemos si te esperamos.
             </p>
           </div>
 
@@ -399,19 +431,17 @@
             <i class="fas fa-star"></i>
           </div>
 
-          {% with messages = get_flashed_messages(with_categories=true) %} {% if
-          messages %}
+          {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
           <div class="mb-4">
             {% for cat, msg in messages %}
-            <div
-              class="alert alert-{{ 'danger' if cat=='danger' else cat }} mb-2"
-              role="alert"
-            >
+            <div class="alert alert-{{ 'danger' if cat=='danger' else cat }} mb-2" role="alert">
               <i class="fas fa-exclamation-circle me-2"></i>{{ msg }}
             </div>
             {% endfor %}
           </div>
-          {% endif %} {% endwith %}
+          {% endif %}
+          {% endwith %}
 
           <form
             action="{{ url_for('enviar_rsvp') }}"
@@ -433,20 +463,16 @@
                 required
               />
               <datalist id="lista-invitados"></datalist>
-              <small class="text-secondary"
-                >Elegí el nombre que aparece en la lista desplegable mientras escribís</small
-              >
+              <small class="text-secondary">
+                Elegí el nombre que aparece en la lista mientras escribís.
+              </small>
             </div>
 
             <div class="mb-4">
               <label class="form-label d-block">
-                <i class="fas fa-check-circle me-2"></i>¿Venis a la fiesta? *
+                <i class="fas fa-check-circle me-2"></i>¿Venís a la fiesta? *
               </label>
-              <div
-                class="btn-group flex-wrap w-100"
-                role="group"
-                aria-label="Asistencia"
-              >
+              <div class="btn-group flex-wrap w-100" role="group" aria-label="Asistencia">
                 <input
                   type="radio"
                   class="btn-check"
@@ -512,28 +538,28 @@
 
     <script src="{{ url_for('static', filename='main.js', v=5) }}"></script>
 
-    {% with messages = get_flashed_messages(with_categories=true) %} {% if
-    messages %}
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
     <script>
       document.addEventListener("DOMContentLoaded", () => {
         {% for category, msg in messages %}
-          /* SweetAlert2 con fondo negro puro */
-          Swal.fire({
-            icon: "{{ 'error' if category == 'danger' else 'success' }}",
-            title: "{{ '¡Gracias por confirmar! 🥂' if category == 'success' else 'Te faltó completar algo...' }}",
-            text: "{{ msg }}",
-            confirmButtonText: "{{ 'Volver' if category == 'success' else 'Entendido' }}",
-            confirmButtonColor: "#d4af37",
-            background: "#000000",
-            color: "#ffffff",
-            customClass: {
-              popup: 'shadow-lg border-0'
-            },
-            backdrop: 'rgba(0, 0, 0, 0.9)'
-          });
+        Swal.fire({
+          icon: "{{ 'error' if category == 'danger' else 'success' }}",
+          title: "{{ '¡Gracias por confirmar! 🥂' if category == 'success' else 'Te faltó completar algo...' }}",
+          text: "{{ msg }}",
+          confirmButtonText: "{{ 'Volver' if category == 'success' else 'Entendido' }}",
+          confirmButtonColor: "#d4af37",
+          background: "#000000",
+          color: "#ffffff",
+          customClass: { popup: 'shadow-lg border-0' },
+          backdrop: 'rgba(0, 0, 0, 0.9)'
+        });
         {% endfor %}
       });
     </script>
-    {% endif %} {% endwith %}
+    {% endif %}
+    {% endwith %}
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   </body>
 </html>

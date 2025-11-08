@@ -2,7 +2,18 @@ import os
 import sqlite3
 import io
 from datetime import datetime
-from flask import Flask, render_template, request, redirect, url_for, flash, abort, g, jsonify, Response
+from flask import (
+    Flask,
+    render_template,
+    request,
+    redirect,
+    url_for,
+    flash,
+    abort,
+    g,
+    jsonify,
+    Response,
+)
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -17,11 +28,13 @@ app.secret_key = os.getenv("FLASK_SECRET_KEY", "cambiame-para-produccion")
 app.config["ADMIN_KEY"] = ADMIN_KEY
 
 # ---------- DB helpers ----------
+
 def get_db():
     if "db" not in g:
         g.db = sqlite3.connect(DB_PATH)
         g.db.row_factory = sqlite3.Row
     return g.db
+
 
 @app.teardown_appcontext
 def close_db(_exc):
@@ -29,9 +42,11 @@ def close_db(_exc):
     if db is not None:
         db.close()
 
+
 def init_db():
     db = get_db()
-    db.execute("""
+    db.execute(
+        """
         CREATE TABLE IF NOT EXISTS rsvps (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nombre TEXT NOT NULL,
@@ -40,15 +55,19 @@ def init_db():
             mensaje TEXT,
             created_at TEXT NOT NULL
         )
-    """)
-    db.execute("""
+    """
+    )
+    db.execute(
+        """
         CREATE TABLE IF NOT EXISTS invitados (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nombre TEXT UNIQUE NOT NULL
         )
-    """)
-    # --- NUEVA TABLA: GASTOS ---
-    db.execute("""
+    """
+    )
+    # --- TABLA GASTOS ---
+    db.execute(
+        """
         CREATE TABLE IF NOT EXISTS gastos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             concepto TEXT NOT NULL,
@@ -57,18 +76,24 @@ def init_db():
             notas TEXT,
             created_at TEXT NOT NULL
         )
-    """)
+    """
+    )
     db.commit()
+
 
 @app.before_request
 def ensure_db():
     init_db()
 
+
 def admin_redirect():
     return redirect(f"{ADMIN_BASE_URL}?key={ADMIN_KEY}")
 
+
 # ---------- Util menú ----------
+
 ALIASES_VEGGIE = {"veggie", "vegano", "vegan", "vegetariano", "vegetal"}
+
 
 def normalize_menu(val: str | None) -> str | None:
     if not val:
@@ -80,17 +105,32 @@ def normalize_menu(val: str | None) -> str | None:
         return "standard"
     return None
 
-# ---------- Rutas principales (RSVP) ----------
+
+# =========================
+# ===    LANDING / RSVP ===
+# =========================
+
 @app.get("/")
+def home():
+    # Landing principal (invitación + confirmar + regalo)
+    return render_template("home.html")
+
+@app.get("/confirmar")
 def rsvp_form():
+    # Formulario de RSVP clásico
     return render_template("rsvp.html")
+
 
 @app.post("/enviar")
 def enviar_rsvp():
     try:
         nombre = (request.form.get("nombre") or "").strip()
         confirma_val = (request.form.get("confirma") or "").strip().lower()
-        raw_menu = (request.form.get("menu") or request.form.get("restricciones") or "").strip().lower()
+        raw_menu = (
+            request.form.get("menu")
+            or request.form.get("restricciones")
+            or ""
+        ).strip().lower()
         mensaje = (request.form.get("mensaje") or "").strip()
 
         errors = []
@@ -104,35 +144,57 @@ def enviar_rsvp():
             errors.append("Elegí un menú: Standard o Veggie.")
 
         db = get_db()
-        row_inv = db.execute("SELECT 1 FROM invitados WHERE nombre = ?", (nombre,)).fetchone()
+        row_inv = db.execute(
+            "SELECT 1 FROM invitados WHERE nombre = ?", (nombre,)
+        ).fetchone()
         if not row_inv:
-            errors.append("El nombre debe coincidir con un invitado cargado.")
+            errors.append(
+                "El nombre debe coincidir con un invitado cargado."
+            )
 
         if errors:
             for e in errors:
                 flash(e, "danger")
-            return redirect(url_for("rsvp_form"))
+            # Volver a la landing, sección confirmar
+            return redirect(url_for("home") + "#confirmar")
 
         confirma = 1 if confirma_val == "si" else 0
         menu_to_save = menu if confirma == 1 else None
 
-        db.execute("""
+        db.execute(
+            """
             INSERT INTO rsvps (nombre, confirma, menu, mensaje, created_at)
             VALUES (?, ?, ?, ?, ?)
-        """, (nombre, confirma, menu_to_save, (mensaje or None),
-              datetime.now().isoformat(timespec="seconds")))
+            """,
+            (
+                nombre,
+                confirma,
+                menu_to_save,
+                (mensaje or None),
+                datetime.now().isoformat(timespec="seconds"),
+            ),
+        )
         db.commit()
 
         return redirect(url_for("gracias"), code=303)
 
     except Exception as ex:
         print("ERROR en /enviar:", ex)
-        flash("Ocurrió un error guardando tu confirmación. Probá de nuevo.", "danger")
-        return redirect(url_for("rsvp_form"))
+        flash(
+            "Ocurrió un error guardando tu confirmación. Probá de nuevo.",
+            "danger",
+        )
+        return redirect(url_for("home") + "#confirmar")
+
 
 @app.get("/gracias")
 def gracias():
     return render_template("gracias.html")
+
+
+# =========================
+# ===      ADMIN        ===
+# =========================
 
 @app.get("/admin")
 def admin():
@@ -141,22 +203,36 @@ def admin():
         abort(401)
 
     db = get_db()
-    rsvps = db.execute("""
+    rsvps = db.execute(
+        """
         SELECT id, nombre, confirma, menu, mensaje, created_at
         FROM rsvps
         ORDER BY created_at DESC
-    """).fetchall()
+        """
+    ).fetchall()
 
-    invitados = db.execute("""
+    invitados = db.execute(
+        """
         SELECT id, nombre
         FROM invitados
         ORDER BY nombre ASC
-    """).fetchall()
+        """
+    ).fetchall()
 
     total_si = sum(1 for r in rsvps if r["confirma"] == 1)
     total_no = sum(1 for r in rsvps if r["confirma"] == 0)
-    total_standard = sum(1 for r in rsvps if r["confirma"] == 1 and (r["menu"] or "").lower() == "standard")
-    total_veggie = sum(1 for r in rsvps if r["confirma"] == 1 and (r["menu"] or "").lower() in {"veggie", "vegano"})
+    total_standard = sum(
+        1
+        for r in rsvps
+        if r["confirma"] == 1
+        and (r["menu"] or "").lower() == "standard"
+    )
+    total_veggie = sum(
+        1
+        for r in rsvps
+        if r["confirma"] == 1
+        and (r["menu"] or "").lower() in {"veggie", "vegano"}
+    )
 
     return render_template(
         "admin.html",
@@ -167,8 +243,9 @@ def admin():
         total_no=total_no,
         total_standard=total_standard,
         total_veggie=total_veggie,
-        key=key
+        key=key,
     )
+
 
 @app.post("/admin/cargar_invitados")
 def admin_cargar_invitados():
@@ -190,11 +267,14 @@ def admin_cargar_invitados():
     db = get_db()
     for n in nombres:
         try:
-            db.execute("INSERT OR IGNORE INTO invitados(nombre) VALUES (?)", (n,))
-        except:
+            db.execute(
+                "INSERT OR IGNORE INTO invitados(nombre) VALUES (?)", (n,)
+            )
+        except Exception:
             pass
     db.commit()
     return admin_redirect()
+
 
 @app.post("/admin/invitado/update")
 def admin_invitado_update():
@@ -204,35 +284,48 @@ def admin_invitado_update():
 
     inv_id = request.form.get("id")
     nuevo = (request.form.get("nombre") or "").strip()
-    cascade = (request.form.get("cascade") == "1")
+    cascade = request.form.get("cascade") == "1"
 
     if not inv_id or not nuevo:
-        flash("Faltan datos para actualizar el invitado.", "danger")
+        flash(
+            "Faltan datos para actualizar el invitado.", "danger"
+        )
         return admin_redirect()
 
     db = get_db()
     try:
-        row_old = db.execute("SELECT nombre FROM invitados WHERE id = ?", (inv_id,)).fetchone()
+        row_old = db.execute(
+            "SELECT nombre FROM invitados WHERE id = ?", (inv_id,)
+        ).fetchone()
         if not row_old:
             flash("Invitado no encontrado.", "danger")
             return admin_redirect()
         viejo = row_old["nombre"]
 
-        db.execute("UPDATE invitados SET nombre = ? WHERE id = ?", (nuevo, inv_id))
+        db.execute(
+            "UPDATE invitados SET nombre = ? WHERE id = ?",
+            (nuevo, inv_id),
+        )
 
         if cascade and viejo != nuevo:
-            db.execute("UPDATE rsvps SET nombre = ? WHERE nombre = ?", (nuevo, viejo))
+            db.execute(
+                "UPDATE rsvps SET nombre = ? WHERE nombre = ?",
+                (nuevo, viejo),
+            )
 
         db.commit()
         flash("Invitado actualizado correctamente.", "success")
     except sqlite3.IntegrityError:
         db.rollback()
-        flash("Ya existe un invitado con ese nombre.", "danger")
+        flash(
+            "Ya existe un invitado con ese nombre.", "danger"
+        )
     except Exception as e:
         db.rollback()
         flash(f"Error al actualizar invitado: {e}", "danger")
 
     return admin_redirect()
+
 
 @app.get("/api/invitados")
 def api_invitados():
@@ -258,7 +351,7 @@ def api_invitados():
         ORDER BY i.nombre
         LIMIT 5
         """,
-        (f"%{q}%",)   # contiene, como tu endpoint viejo
+        (f"%{q}%",),
     ).fetchall()
 
     return jsonify({"ok": True, "items": [f["nombre"] for f in filas]})
@@ -274,12 +367,14 @@ def admin_rsvp_update():
 
     rid = request.form.get("id")
     nombre = (request.form.get("nombre") or "").strip()
-    confirma = request.form.get("confirma")    # "1" o "0"
+    confirma = request.form.get("confirma")  # "1" o "0"
     raw_menu = (request.form.get("menu") or "").strip().lower()
     mensaje = (request.form.get("mensaje") or "").strip() or None
 
     if not rid or not nombre or confirma not in ("0", "1"):
-        flash("Datos incompletos para actualizar el RSVP.", "danger")
+        flash(
+            "Datos incompletos para actualizar el RSVP.", "danger"
+        )
         return admin_redirect()
 
     menu = normalize_menu(raw_menu)
@@ -296,7 +391,7 @@ def admin_rsvp_update():
                    mensaje = ?
              WHERE id = ?
             """,
-            (nombre, int(confirma), menu, mensaje, rid)
+            (nombre, int(confirma), menu, mensaje, rid),
         )
         db.commit()
         flash("RSVP actualizado correctamente.", "success")
@@ -305,6 +400,7 @@ def admin_rsvp_update():
         flash(f"Error al actualizar: {e}", "danger")
 
     return admin_redirect()
+
 
 @app.get("/admin/export.xlsx")
 def admin_export_xlsx():
@@ -325,7 +421,8 @@ def admin_export_xlsx():
 
     db = get_db()
     try:
-        rows = db.execute("""
+        rows = db.execute(
+            """
             SELECT i.nombre,
                    r.confirma,
                    r.menu,
@@ -342,29 +439,46 @@ def admin_export_xlsx():
                 )
             ) r ON r.nombre = i.nombre
             ORDER BY i.nombre
-        """).fetchall()
+        """
+        ).fetchall()
     except Exception as e:
-        return Response(f"Error leyendo la base: {e}", mimetype="text/plain; charset=utf-8", status=500)
+        return Response(
+            f"Error leyendo la base: {e}",
+            mimetype="text/plain; charset=utf-8",
+            status=500,
+        )
 
     respondieron, faltan = [], []
     for row in rows:
         if row["created_at"]:
             confirma_txt = "si" if row["confirma"] == 1 else "no"
-            respondieron.append([
-                row["nombre"],
-                confirma_txt,
-                row["menu"] or "",
-                row["mensaje"] or "",
-                row["created_at"],
-            ])
+            respondieron.append(
+                [
+                    row["nombre"],
+                    confirma_txt,
+                    row["menu"] or "",
+                    row["mensaje"] or "",
+                    row["created_at"],
+                ]
+            )
         else:
             faltan.append([row["nombre"]])
+
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment
+    from openpyxl.utils import get_column_letter
 
     wb = Workbook()
 
     ws1 = wb.active
     ws1.title = "Respondieron"
-    headers1 = ["nombre", "confirma", "menu", "mensaje", "fecha_ultima_respuesta"]
+    headers1 = [
+        "nombre",
+        "confirma",
+        "menu",
+        "mensaje",
+        "fecha_ultima_respuesta",
+    ]
     ws1.append(headers1)
     for r in respondieron:
         ws1.append(r)
@@ -393,10 +507,16 @@ def admin_export_xlsx():
     filename = f"confirmaciones_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
     resp = Response(
         bio.read(),
-        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        mimetype=(
+            "application/vnd.openxmlformats-"
+            "officedocument.spreadsheetml.sheet"
+        ),
     )
-    resp.headers["Content-Disposition"] = f"attachment; filename={filename}"
+    resp.headers[
+        "Content-Disposition"
+    ] = f"attachment; filename={filename}"
     return resp
+
 
 @app.post("/admin/invitado/delete")
 def admin_invitado_delete():
@@ -412,18 +532,29 @@ def admin_invitado_delete():
         return admin_redirect()
 
     db = get_db()
-    inv = db.execute("SELECT id, nombre FROM invitados WHERE id = ?", (inv_id,)).fetchone()
+    inv = db.execute(
+        "SELECT id, nombre FROM invitados WHERE id = ?", (inv_id,)
+    ).fetchone()
     if not inv:
         flash("El invitado no existe.", "danger")
         return admin_redirect()
 
     try:
         if cascade:
-            db.execute("DELETE FROM rsvps WHERE nombre = ?", (inv["nombre"],))
-        db.execute("DELETE FROM invitados WHERE id = ?", (inv_id,))
+            db.execute(
+                "DELETE FROM rsvps WHERE nombre = ?",
+                (inv["nombre"],),
+            )
+        db.execute(
+            "DELETE FROM invitados WHERE id = ?", (inv_id,)
+        )
         db.commit()
         msg = f'Invitado "{inv["nombre"]}" eliminado'
-        msg += " junto con sus confirmaciones." if cascade else "."
+        msg += (
+            " junto con sus confirmaciones."
+            if cascade
+            else "."
+        )
         flash(msg, "success")
     except Exception as e:
         db.rollback()
@@ -431,8 +562,9 @@ def admin_invitado_delete():
 
     return admin_redirect()
 
+
 # =========================
-# ===  MÓDULO GASTOS   ===
+# ===     MÓDULO GASTOS ===
 # =========================
 
 def parse_monto(s: str) -> float:
@@ -442,33 +574,39 @@ def parse_monto(s: str) -> float:
     if not s:
         return 0.0
     s = s.strip()
-    # Normalización simple: si hay coma y no hay punto, reemplazar coma por punto
     if "," in s and "." not in s:
         s = s.replace(",", ".")
-    # Remover separadores de miles comunes
     s = s.replace(" ", "").replace(",", "")
     try:
         return float(s)
-    except:
-        return float(s.replace(".", "", s.count(".")-1))  # fallback tosco
+    except Exception:
+        # fallback: si hay muchos puntos, dejar solo el último como decimal
+        try:
+            return float(s.replace(".", "", s.count(".") - 1))
+        except Exception:
+            return 0.0
+
 
 def get_totales_base(db, n_manual: int | None, base: str):
-    # total invitados
-    total_invitados = db.execute("SELECT COUNT(*) AS c FROM invitados").fetchone()["c"]
+    total_invitados = db.execute(
+        "SELECT COUNT(*) AS c FROM invitados"
+    ).fetchone()["c"]
 
-    # total confirmados (según ÚLTIMA respuesta por nombre)
-    total_confirmados = db.execute("""
+    total_confirmados = db.execute(
+        """
         SELECT COUNT(*) AS c
         FROM (
           SELECT r1.nombre, MAX(r1.created_at) AS mx
           FROM rsvps r1
           GROUP BY r1.nombre
         ) u
-        JOIN rsvps r ON r.nombre = u.nombre AND r.created_at = u.mx
+        JOIN rsvps r
+          ON r.nombre = u.nombre
+         AND r.created_at = u.mx
         WHERE r.confirma = 1
-    """).fetchone()["c"]
+        """
+    ).fetchone()["c"]
 
-    # n_base
     if base == "confirmados":
         n_base = total_confirmados
     elif base == "manual":
@@ -479,25 +617,31 @@ def get_totales_base(db, n_manual: int | None, base: str):
 
     return total_invitados, total_confirmados, n_base, base
 
+
 @app.get("/gastos")
 def gastos_panel():
     base = (request.args.get("base") or "invitados").strip().lower()
     try:
         n_manual = int(request.args.get("n") or 0)
-    except:
+    except Exception:
         n_manual = 0
 
     db = get_db()
-    total_invitados, total_confirmados, n_base, base = get_totales_base(db, n_manual, base)
+    (
+        total_invitados,
+        total_confirmados,
+        n_base,
+        base,
+    ) = get_totales_base(db, n_manual, base)
 
-    # Traer gastos y calcular totales en Python
-    filas = db.execute("""
+    filas = db.execute(
+        """
         SELECT id, concepto, tipo, monto, notas, created_at
         FROM gastos
         ORDER BY created_at DESC, id DESC
-    """).fetchall()
+        """
+    ).fetchall()
 
-    # Calcular totales
     total_por_invitado = 0.0
     total_totales = 0.0
     filas_calc = []
@@ -508,18 +652,23 @@ def gastos_panel():
         else:
             total_linea = (r["monto"] or 0.0)
             total_totales += total_linea
-        filas_calc.append({
-            "id": r["id"],
-            "concepto": r["concepto"],
-            "tipo": r["tipo"],
-            "monto": float(r["monto"] or 0.0),
-            "notas": r["notas"],
-            "created_at": r["created_at"],
-            "total_linea": float(total_linea),
-        })
+
+        filas_calc.append(
+            {
+                "id": r["id"],
+                "concepto": r["concepto"],
+                "tipo": r["tipo"],
+                "monto": float(r["monto"] or 0.0),
+                "notas": r["notas"],
+                "created_at": r["created_at"],
+                "total_linea": float(total_linea),
+            }
+        )
 
     gran_total = total_por_invitado + total_totales
-    costo_por_invitado = (gran_total / n_base) if n_base > 0 else 0.0
+    costo_por_invitado = (
+        (gran_total / n_base) if n_base > 0 else 0.0
+    )
 
     return render_template(
         "gastos.html",
@@ -532,15 +681,16 @@ def gastos_panel():
         total_por_invitado=total_por_invitado,
         total_totales=total_totales,
         gran_total=gran_total,
-        costo_por_invitado=costo_por_invitado
+        costo_por_invitado=costo_por_invitado,
     )
+
 
 @app.post("/gastos/agregar")
 def gastos_agregar():
     base = (request.args.get("base") or "invitados").strip().lower()
     try:
         n_manual = int(request.args.get("n") or 0)
-    except:
+    except Exception:
         n_manual = 0
 
     concepto = (request.form.get("concepto") or "").strip()
@@ -550,28 +700,46 @@ def gastos_agregar():
 
     if not concepto or tipo not in ("por_invitado", "total"):
         flash("Completá concepto y tipo.", "danger")
-        return redirect(url_for("gastos_panel", base=base, n=n_manual))
+        return redirect(
+            url_for("gastos_panel", base=base, n=n_manual)
+        )
 
     monto = parse_monto(monto_raw)
     if monto < 0:
-        flash("El monto no puede ser negativo.", "danger")
-        return redirect(url_for("gastos_panel", base=base, n=n_manual))
+        flash(
+            "El monto no puede ser negativo.", "danger"
+        )
+        return redirect(
+            url_for("gastos_panel", base=base, n=n_manual)
+        )
 
     db = get_db()
-    db.execute("""
+    db.execute(
+        """
         INSERT INTO gastos (concepto, tipo, monto, notas, created_at)
         VALUES (?, ?, ?, ?, ?)
-    """, (concepto, tipo, monto, notas, datetime.now().isoformat(timespec="seconds")))
+        """,
+        (
+            concepto,
+            tipo,
+            monto,
+            notas,
+            datetime.now().isoformat(timespec="seconds"),
+        ),
+    )
     db.commit()
     flash("Gasto agregado.", "success")
-    return redirect(url_for("gastos_panel", base=base, n=n_manual))
+    return redirect(
+        url_for("gastos_panel", base=base, n=n_manual)
+    )
+
 
 @app.post("/gastos/editar")
 def gastos_editar():
     base = (request.args.get("base") or "invitados").strip().lower()
     try:
         n_manual = int(request.args.get("n") or 0)
-    except:
+    except Exception:
         n_manual = 0
 
     gid = request.form.get("id")
@@ -581,44 +749,63 @@ def gastos_editar():
     notas = (request.form.get("notas") or "").strip() or None
 
     if not gid or not concepto or tipo not in ("por_invitado", "total"):
-        flash("Datos incompletos para editar.", "danger")
-        return redirect(url_for("gastos_panel", base=base, n=n_manual))
+        flash(
+            "Datos incompletos para editar.", "danger"
+        )
+        return redirect(
+            url_for("gastos_panel", base=base, n=n_manual)
+        )
 
     monto = parse_monto(monto_raw)
     if monto < 0:
-        flash("El monto no puede ser negativo.", "danger")
-        return redirect(url_for("gastos_panel", base=base, n=n_manual))
+        flash(
+            "El monto no puede ser negativo.", "danger"
+        )
+        return redirect(
+            url_for("gastos_panel", base=base, n=n_manual)
+        )
 
     db = get_db()
-    db.execute("""
+    db.execute(
+        """
         UPDATE gastos
            SET concepto = ?, tipo = ?, monto = ?, notas = ?
          WHERE id = ?
-    """, (concepto, tipo, monto, notas, gid))
+        """,
+        (concepto, tipo, monto, notas, gid),
+    )
     db.commit()
     flash("Gasto actualizado.", "success")
-    return redirect(url_for("gastos_panel", base=base, n=n_manual))
+    return redirect(
+        url_for("gastos_panel", base=base, n=n_manual)
+    )
+
 
 @app.post("/gastos/borrar/<int:gid>")
 def gastos_borrar(gid):
     base = (request.args.get("base") or "invitados").strip().lower()
     try:
         n_manual = int(request.args.get("n") or 0)
-    except:
+    except Exception:
         n_manual = 0
 
     db = get_db()
-    db.execute("DELETE FROM gastos WHERE id = ?", (gid,))
+    db.execute(
+        "DELETE FROM gastos WHERE id = ?", (gid,)
+    )
     db.commit()
     flash("Gasto eliminado.", "success")
-    return redirect(url_for("gastos_panel", base=base, n=n_manual))
+    return redirect(
+        url_for("gastos_panel", base=base, n=n_manual)
+    )
+
 
 @app.get("/gastos/export.xlsx")
 def gastos_export_xlsx():
     base = (request.args.get("base") or "invitados").strip().lower()
     try:
         n_manual = int(request.args.get("n") or 0)
-    except:
+    except Exception:
         n_manual = 0
 
     try:
@@ -633,15 +820,21 @@ def gastos_export_xlsx():
         )
 
     db = get_db()
-    total_invitados, total_confirmados, n_base, base = get_totales_base(db, n_manual, base)
+    (
+        total_invitados,
+        total_confirmados,
+        n_base,
+        base,
+    ) = get_totales_base(db, n_manual, base)
 
-    filas = db.execute("""
+    filas = db.execute(
+        """
         SELECT id, concepto, tipo, monto, notas, created_at
         FROM gastos
         ORDER BY created_at DESC, id DESC
-    """).fetchall()
+        """
+    ).fetchall()
 
-    # armar data + totales
     total_por_invitado = 0.0
     total_totales = 0.0
     rows = []
@@ -652,25 +845,37 @@ def gastos_export_xlsx():
         else:
             total_linea = (r["monto"] or 0.0)
             total_totales += total_linea
-        rows.append([
-            r["created_at"],
-            r["concepto"],
-            r["tipo"],
-            float(r["monto"] or 0.0),
-            n_base if r["tipo"] == "por_invitado" else "",
-            float(total_linea),
-            r["notas"] or "",
-        ])
+
+        rows.append(
+            [
+                r["created_at"],
+                r["concepto"],
+                r["tipo"],
+                float(r["monto"] or 0.0),
+                n_base if r["tipo"] == "por_invitado" else "",
+                float(total_linea),
+                r["notas"] or "",
+            ]
+        )
 
     gran_total = total_por_invitado + total_totales
-    costo_por_invitado = (gran_total / n_base) if n_base > 0 else 0.0
+    costo_por_invitado = (
+        (gran_total / n_base) if n_base > 0 else 0.0
+    )
 
     wb = Workbook()
 
-    # Hoja 1: Gastos
     ws1 = wb.active
     ws1.title = "Gastos"
-    headers1 = ["fecha", "concepto", "tipo", "monto_base", "n_base", "total_linea", "notas"]
+    headers1 = [
+        "fecha",
+        "concepto",
+        "tipo",
+        "monto_base",
+        "n_base",
+        "total_linea",
+        "notas",
+    ]
     ws1.append(headers1)
     for row in rows:
         ws1.append(row)
@@ -682,9 +887,10 @@ def gastos_export_xlsx():
 
     widths = [20, 28, 14, 14, 10, 16, 40]
     for i, w in enumerate(widths, start=1):
-        ws1.column_dimensions[get_column_letter(i)].width = w
+        ws1.column_dimensions[
+            get_column_letter(i)
+        ].width = w
 
-    # Hoja 2: Resumen
     ws2 = wb.create_sheet("Resumen")
     ws2.append(["Base usada", n_base])
     ws2.append(["Total por invitado", total_por_invitado])
@@ -701,10 +907,16 @@ def gastos_export_xlsx():
     filename = f"gastos_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
     resp = Response(
         bio.read(),
-        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        mimetype=(
+            "application/vnd.openxmlformats-"
+            "officedocument.spreadsheetml.sheet"
+        ),
     )
-    resp.headers["Content-Disposition"] = f"attachment; filename={filename}"
+    resp.headers[
+        "Content-Disposition"
+    ] = f"attachment; filename={filename}"
     return resp
+
 
 # ----------------------
 

@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Juli & Marian</title>
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --primary-gold: #d4af37;
+      --primary-gold-soft: #f4e4c1;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      overflow-x: hidden;
+      font-family: "Inter", sans-serif;
+      background-color: #000;
+    }
+
+    /* NAVBAR FIJA ARRIBA */
+    .top-nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 10;
+      padding: 0.6rem 1.2rem;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem 1rem;
+      background: rgba(0, 0, 0, 0.9);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid rgba(212,175,55,0.25);
+    }
+
+    .brand-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 0.1rem;
+    }
+
+    .brand-title {
+      font-family: "Playfair Display", serif;
+      font-size: 1.6rem;
+      font-weight: 700;
+      background: linear-gradient(
+        135deg,
+        var(--primary-gold) 0%,
+        var(--primary-gold-soft) 40%,
+        var(--primary-gold) 100%
+      );
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      letter-spacing: 0.05em;
+      margin: 0;
+      text-shadow: 0 2px 10px rgba(212,175,55,0.35);
+    }
+
+    .brand-subtitle {
+      font-size: 0.7rem;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.7);
+      margin: 0;
+    }
+
+    .nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .nav-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.45rem 1.3rem;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      font-weight: 500;
+      text-decoration: none;
+      border: 1px solid rgba(212,175,55,0.6);
+      color: var(--primary-gold-soft);
+      background: radial-gradient(circle at top left, rgba(212,175,55,0.18), transparent);
+      box-shadow: 0 4px 14px rgba(0,0,0,0.6);
+      transition: all 0.25s ease;
+      backdrop-filter: blur(6px);
+      gap: 0.4rem;
+      white-space: nowrap;
+    }
+
+    .nav-btn.primary {
+      background: linear-gradient(135deg, var(--primary-gold) 0%, #c9a961 100%);
+      color: #000;
+      border-color: transparent;
+      font-weight: 600;
+      box-shadow: 0 6px 16px rgba(212,175,55,0.45);
+    }
+
+    .nav-btn:hover {
+      transform: translateY(-1px);
+      border-color: var(--primary-gold);
+      color: var(--primary-gold-soft);
+      text-decoration: none;
+    }
+
+    .nav-btn.primary:hover {
+      box-shadow: 0 10px 26px rgba(212,175,55,0.6);
+      color: #000;
+    }
+
+    /* Fondo invitación */
+    .invite-bg {
+      position: fixed;
+      top: 72px; /* debajo de la navbar */
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: #000 url("{{ url_for('static', filename='invitacion_casamiento.png') }}")
+                  no-repeat center center;
+      background-size: contain;
+      z-index: 0;
+    }
+
+    .page-spacer {
+      height: 100vh;
+      z-index: 1;
+    }
+
+    /* Mobile */
+    @media (max-width: 576px) {
+      .top-nav {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .nav-actions {
+        width: 100%;
+        justify-content: flex-start;
+        gap: 0.4rem;
+      }
+
+      .nav-btn {
+        padding: 0.35rem 0.9rem !important;
+        font-size: 0.75rem !important;
+        border-radius: 999px !important;
+      }
+
+      .brand-title {
+        font-size: 1.2rem;
+      }
+
+      .brand-subtitle {
+        font-size: 0.6rem;
+      }
+
+      .invite-bg {
+        top: 80px;
+        background-size: contain;
+        background-position: top center;
+      }
+    }
+
+    /* Botón copiar */
+    .copy-btn {
+      font-size: 0.75rem;
+      padding: 3px 10px;
+      border-radius: 20px;
+      border: 1px solid rgba(212,175,55,0.4);
+      background: rgba(212,175,55,0.15);
+      color: #f4e4c1;
+      cursor: pointer;
+      transition: all 0.25s;
+    }
+    .copy-btn:hover {
+      background: rgba(212,175,55,0.35);
+      color: #fff;
+      transform: translateY(-1px);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- NAVBAR -->
+  <header class="top-nav">
+    <div class="brand-wrap">
+      <h2 class="brand-title">Juli &amp; Marian</h2>
+      <p class="brand-subtitle">10 · 04 · 2026</p>
+    </div>
+
+    <div class="nav-actions">
+      <a href="{{ url_for('rsvp_form') }}" class="nav-btn primary">
+        Confirmar
+      </a>
+      <a href="#" class="nav-btn" data-bs-toggle="modal" data-bs-target="#modalRegalo">
+        Regalo
+      </a>
+      <a href="#" class="nav-btn" data-bs-toggle="modal" data-bs-target="#modalDressCode">
+        Dress Code
+      </a>
+    </div>
+  </header>
+
+  <!-- Fondo invitación -->
+  <div class="invite-bg"></div>
+  <div class="page-spacer"></div>
+
+  <!-- MODAL REGALO -->
+  <div class="modal fade" id="modalRegalo" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content text-light border-0"
+           style="background: radial-gradient(circle at top, #0c0c0c 0%, #000 80%);
+                  border: 1px solid rgba(212,175,55,0.3);
+                  box-shadow: 0 0 25px rgba(212,175,55,0.25);
+                  border-radius: 18px;">
+
+        <div class="modal-header border-0 text-center d-block">
+          <h4 class="modal-title fw-bold"
+              style="font-family:'Playfair Display',serif;
+                     background:linear-gradient(135deg,#d4af37,#f4e4c1,#d4af37);
+                     -webkit-background-clip:text;
+                     -webkit-text-fill-color:transparent;
+                     text-shadow:0 0 15px rgba(212,175,55,0.25);">
+            Información para el regalo
+          </h4>
+          <button type="button"
+                  class="btn-close btn-close-white position-absolute end-0 me-3 mt-2"
+                  data-bs-dismiss="modal"
+                  aria-label="Cerrar"></button>
+        </div>
+
+        <div class="modal-body pt-0 px-4">
+          <p class="text-center small mb-4" style="color:#f4e4c1;">
+            Si querés hacernos un regalo, te dejamos nuestros datos:
+          </p>
+
+          <!-- Alias -->
+          <div class="p-3 mb-3 rounded-4"
+               style="background:rgba(255,255,255,0.05);
+                      border:1px solid rgba(212,175,55,0.3);
+                      box-shadow:inset 0 0 10px rgba(212,175,55,0.15);">
+            <div class="d-flex justify-content-between align-items-center">
+              <div>
+                <div class="small text-uppercase"
+                     style="color:#f4e4c1; opacity:0.9;">Alias</div>
+                <div id="alias" class="fw-semibold fs-6" style="color:#ffd66d;">
+                  JULI.BARBIERI
+                </div>
+              </div>
+              <button class="copy-btn" onclick="copiar('alias', this)">Copiar</button>
+            </div>
+          </div>
+
+          <!-- CBU -->
+          <div class="p-3 mb-3 rounded-4"
+               style="background:rgba(255,255,255,0.05);
+                      border:1px solid rgba(212,175,55,0.3);
+                      box-shadow:inset 0 0 10px rgba(212,175,55,0.15);">
+            <div class="d-flex justify-content-between align-items-center">
+              <div>
+                <div class="small text-uppercase"
+                     style="color:#f4e4c1; opacity:0.9;">CBU</div>
+                <div id="cbu" class="fw-semibold fs-6" style="color:#ffd66d;">
+                  0720431388000035628204
+                </div>
+              </div>
+              <button class="copy-btn" onclick="copiar('cbu', this)">Copiar</button>
+            </div>
+          </div>
+
+          <!-- Titular -->
+          <div class="p-3 rounded-4 mb-3"
+               style="background:rgba(255,255,255,0.03);
+                      border:1px solid rgba(212,175,55,0.2);">
+            <div class="small text-uppercase"
+                 style="color:#f4e4c1; opacity:0.9;">Titular</div>
+            <div class="fw-semibold" style="color:#fff;">Julieta Barbieri Maggio</div>
+            <div class="small" style="color:#f4e4c1;">Banco Santander Río</div>
+          </div>
+
+          <div class="text-center mt-4">
+            <p class="small mb-1" style="color:#f4e4c1;">
+            Gracias por acompañarnos en este dia tan unico!
+            </p>
+          </div>
+        </div>
+
+        <div class="modal-footer border-0 justify-content-center pb-4">
+          <button type="button"
+                  class="btn btn-outline-warning btn-sm px-4 rounded-pill"
+                  style="border-width:1.5px; color:#f4e4c1; border-color:#d4af37;"
+                  data-bs-dismiss="modal">
+            Cerrar
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DRESS CODE -->
+  <div class="modal fade" id="modalDressCode" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content text-light border-0"
+           style="background: radial-gradient(circle at top, #0c0c0c 0%, #000 80%);
+                  border: 1px solid rgba(212,175,55,0.3);
+                  box-shadow: 0 0 25px rgba(212,175,55,0.25);
+                  border-radius: 18px;">
+
+        <div class="modal-header border-0 text-center d-block">
+          <h4 class="modal-title fw-bold"
+              style="font-family:'Playfair Display',serif;
+                     background:linear-gradient(135deg,#d4af37,#f4e4c1,#d4af37);
+                     -webkit-background-clip:text;
+                     -webkit-text-fill-color:transparent;
+                     text-shadow:0 0 15px rgba(212,175,55,0.25);">
+            Dress Code
+          </h4>
+          <button type="button"
+                  class="btn-close btn-close-white position-absolute end-0 me-3 mt-2"
+                  data-bs-dismiss="modal"
+                  aria-label="Cerrar"></button>
+        </div>
+
+        <div class="modal-body text-center px-4">
+          <div class="p-4 rounded-4 mx-auto"
+               style="background:rgba(255,255,255,0.05);
+                      border:1px solid rgba(212,175,55,0.3);
+                      box-shadow:inset 0 0 10px rgba(212,175,55,0.15);
+                      max-width:280px;">
+            <h5 class="fw-semibold mb-0"
+                style="color:#ffd66d; letter-spacing:0.05em;">
+              Elegante
+            </h5>
+          </div>
+          <p class="small mt-4 mb-0" style="color:#f4e4c1;">
+            🌟 Te esperamos para compartir una noche especial 🌟
+          </p>
+        </div>
+
+        <div class="modal-footer border-0 justify-content-center pb-4">
+          <button type="button"
+                  class="btn btn-outline-warning btn-sm px-4 rounded-pill"
+                  style="border-width:1.5px; color:#f4e4c1; border-color:#d4af37;"
+                  data-bs-dismiss="modal">
+            Cerrar
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCRIPT COPIAR -->
+  <script>
+    function copiar(id, btn) {
+      const texto = document.getElementById(id).innerText.trim();
+      navigator.clipboard.writeText(texto).then(() => {
+        const original = btn.innerText;
+        btn.innerText = "✔ Copiado";
+        btn.style.background = "rgba(212,175,55,0.4)";
+        setTimeout(() => {
+          btn.innerText = original;
+          btn.style.background = "rgba(212,175,55,0.15)";
+        }, 1800);
+      });
+    }
+  </script>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
